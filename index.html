@@ -615,23 +615,24 @@ async function sendMessage(text) {
 
 async function callClaude(msgs) {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(PROXY_URL, {
       method: 'POST',
-      headers: {
-        'x-api-key': claudeKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-client-side-allow-origins': window.location.origin,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        type: 'claude',
+        api_key: claudeKey,
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
         system: SYSTEM_PROMPT,
         messages: msgs,
       }),
     });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Claude proxy error:', res.status, err);
+      return 'Fout: ' + res.status + ' — ' + err.slice(0, 80);
+    }
     const data = await res.json();
-    if (!res.ok) { console.error('Claude error:', data); return 'Fout: ' + (data.error?.message || res.status); }
     return data.content?.map(b => b.text || '').join('') || '';
   } catch(e) {
     console.error('Claude fetch error:', e);
