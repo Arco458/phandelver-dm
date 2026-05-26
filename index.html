@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lost Mine of Phandelver — AI Dungeon Master</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0805;
+      font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+      color: #e8d5a0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* SETUP SCREEN */
+    #setup-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 20px;
+      background: radial-gradient(ellipse at 50% 30%, rgba(120,60,10,0.2) 0%, transparent 70%);
+    }
+    #setup-screen h1 { color: #d4af37; font-size: 24px; text-align: center; margin-bottom: 6px; text-shadow: 0 0 30px rgba(212,175,55,0.4); }
+    #setup-screen p { color: #8a6a30; font-size: 13px; margin-bottom: 30px; text-align: center; letter-spacing: 0.1em; }
+    .setup-card {
+      background: #130e04;
+      border: 1px solid #3a2408;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .setup-label { color: #8a6030; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+    .setup-input {
+      width: 100%;
+      background: #0a0805;
+      border: 1px solid #3a2408;
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #e8d5a0;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    .setup-input:focus { border-color: #8a5a10; }
+    .setup-btn {
+      background: linear-gradient(135deg, #8a5a10 0%, #6a4008 100%);
+      border: 1px solid #6a4010;
+      color: #f0e0a0;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 6px;
+      letter-spacing: 0.05em;
+    }
+    .setup-btn:hover { background: linear-gradient(135deg, #a06a20 0%, #7a5010 100%); }
+    .setup-note { color: #4a3020; font-size: 11px; text-align: center; line-height: 1.6; }
+
+    /* MAIN APP */
+    #app { display: none; flex-direction: column; height: 100vh; }
+
+    /* HEADER */
+    #header {
+      background: linear-gradient(180deg, #1a0f02 0%, #120b02 100%);
+      border-bottom: 2px solid #5a3a10;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    }
+    .header-title { display: flex; align-items: center; gap: 10px; }
+    .header-title h2 { color: #d4af37; font-size: 16px; letter-spacing: 0.05em; text-shadow: 0 0 20px rgba(212,175,55,0.5); }
+    .header-title small { color: #8a6a30; font-size: 10px; letter-spacing: 0.1em; display: block; }
+    .header-btns { display: flex; gap: 8px; }
+    .hbtn {
+      background: rgba(90,58,16,0.3);
+      border: 1px solid #3a2408;
+      color: #a07840;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .hbtn:hover, .hbtn.active { background: rgba(212,175,55,0.2); color: #d4af37; border-color: #8a5a10; }
+
+    /* VOICE PANEL */
+    #voice-panel {
+      display: none;
+      background: #120c03;
+      border-bottom: 1px solid #2a1a08;
+      padding: 12px 16px;
+      gap: 10px;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    #voice-panel.open { display: flex; }
+    .voice-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #voice-error { color: #c04040; font-size: 12px; display: none; }
+
+    /* MAIN LAYOUT */
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* CHAT */
+    #chat-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .msg-wrap { display: flex; flex-direction: column; }
+    .msg-wrap.player { align-items: flex-end; }
+    .msg-wrap.dm { align-items: flex-start; }
+
+    .msg-bubble {
+      max-width: 85%;
+      border-radius: 16px;
+      padding: 12px 16px;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+    .msg-bubble.dm {
+      background: linear-gradient(135deg, #1e1408 0%, #160e04 100%);
+      border: 1px solid #4a2e08;
+      border-top-left-radius: 4px;
+      color: #e8d5a0;
+    }
+    .msg-bubble.player {
+      background: linear-gradient(135deg, #0d1a2e 0%, #091422 100%);
+      border: 1px solid #1a3a5c;
+      border-top-right-radius: 4px;
+      color: #a0c4e8;
+    }
+    .msg-label {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .msg-label.dm { color: #8a6030; }
+    .msg-label.player { color: #4a7090; justify-content: flex-end; }
+    .play-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #6a4a20;
+      padding: 2px 8px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .play-btn:hover, .play-btn.playing { background: rgba(212,175,55,0.2); color: #d4af37; border-color: #8a5a10; }
+    .msg-text strong { color: #d4af37; font-weight: 700; }
+
+    .thinking {
+      background: linear-gradient(135deg, #1e1408 0%, #160e04 100%);
+      border: 1px solid #4a2e08;
+      border-top-left-radius: 4px;
+      border-radius: 16px;
+      padding: 12px 16px;
+      color: #8a6030;
+      font-size: 13px;
+      display: none;
+      align-self: flex-start;
+    }
+    .thinking.visible { display: block; }
+
+    /* QUICK ACTIONS */
+    #quick-actions {
+      padding: 6px 12px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      border-top: 1px solid #1a1005;
+      background: #0c0803;
+      flex-shrink: 0;
+    }
+    .qbtn {
+      background: rgba(90,58,16,0.3);
+      border: 1px solid #3a2408;
+      color: #a07840;
+      padding: 5px 11px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .qbtn:hover { background: rgba(90,58,16,0.6); color: #d4af37; }
+
+    /* DICE PANEL */
+    #dice-panel {
+      display: none;
+      background: #120c03;
+      border-top: 1px solid #2a1a08;
+      padding: 10px 14px;
+      flex-shrink: 0;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #dice-panel.open { display: flex; }
+    .dice-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .dbtn {
+      background: rgba(90,58,16,0.4);
+      border: 1px solid #5a3a10;
+      color: #c4941c;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      min-width: 46px;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .dbtn:hover { background: rgba(212,175,55,0.2); color: #d4af37; }
+    .tray-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .mod-btn {
+      background: rgba(90,58,16,0.3);
+      border: 1px solid #3a2408;
+      color: #a07840;
+      padding: 2px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 15px;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .mod-btn:hover { color: #d4af37; }
+    #mod-display { color: #d4af37; font-size: 15px; font-weight: 700; min-width: 28px; text-align: center; }
+    #tray-result { color: #c4941c; font-size: 13px; font-style: italic; }
+    #tray-result.has-rolls { font-style: normal; }
+    .tray-send-btn {
+      background: rgba(140,100,20,0.3);
+      border: 1px solid #8a5a10;
+      color: #d4af37;
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .tray-clear-btn {
+      background: transparent;
+      border: 1px solid #3a2408;
+      color: #6a3020;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-family: inherit;
+    }
+
+    /* INPUT ROW */
+    #input-row {
+      padding: 10px 12px;
+      background: #0c0803;
+      border-top: 1px solid #1a1005;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #dice-toggle {
+      background: rgba(90,58,16,0.3);
+      border: 1px solid #3a2408;
+      color: #8a6030;
+      padding: 10px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    #dice-toggle.active { background: rgba(212,175,55,0.2); color: #d4af37; border-color: #8a5a10; }
+    #msg-input {
+      flex: 1;
+      background: #130e03;
+      border: 1px solid #3a2408;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e8d5a0;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+    }
+    #msg-input:focus { border-color: #6a4010; }
+    #msg-input::placeholder { color: #3a2510; }
+    #send-btn {
+      background: linear-gradient(135deg, #8a5a10 0%, #6a4008 100%);
+      border: 1px solid #5a3a10;
+      color: #f0e0a0;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 18px;
+      transition: all 0.15s;
+    }
+    #send-btn:disabled { background: #1a1005; color: #3a2510; cursor: not-allowed; }
+
+    /* SIDEBAR */
+    #sidebar {
+      width: 300px;
+      background: #0c0803;
+      border-left: 1px solid #1a1005;
+      overflow-y: auto;
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    #sidebar.open { display: flex; }
+    .ref-card { background: #130e03; border: 1px solid #221508; border-radius: 8px; padding: 10px; }
+    .ref-title { color: #c4941c; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+    .ref-line { color: #8a6a40; font-size: 11px; line-height: 1.8; border-bottom: 1px solid #1a1005; padding-bottom: 3px; margin-bottom: 3px; }
+    .ref-line:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0805; }
+    ::-webkit-scrollbar-thumb { background: #2a1a08; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <h1>🐉 Lost Mine of Phandelver</h1>
+  <p>AI DUNGEON MASTER</p>
+  <div class="setup-card">
+    <div>
+      <div class="setup-label">Anthropic API Key</div>
+      <input class="setup-input" type="password" id="setup-claude-key" placeholder="sk-ant-...">
+    </div>
+    <div>
+      <div class="setup-label">ElevenLabs API Key <span style="color:#4a3020">(optioneel)</span></div>
+      <input class="setup-input" type="password" id="setup-eleven-key" placeholder="sk-...">
+    </div>
+    <div>
+      <div class="setup-label">ElevenLabs Voice ID <span style="color:#4a3020">(optioneel)</span></div>
+      <input class="setup-input" type="text" id="setup-voice-id" placeholder="abc123xyz...">
+    </div>
+    <button class="setup-btn" onclick="startApp()">⚔ Begin het avontuur</button>
+    <p class="setup-note">Je keys worden alleen in dit browsertabblad bewaard en nooit verstuurd naar andere servers dan Anthropic en ElevenLabs.</p>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div id="header">
+    <div class="header-title">
+      <span style="font-size:24px">🐉</span>
+      <div>
+        <h2>Lost Mine of Phandelver</h2>
+        <small>AI DUNGEON MASTER</small>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="hbtn" id="voice-toggle-btn" onclick="toggleVoicePanel()">🔊 Stem</button>
+      <button class="hbtn" id="sidebar-btn" onclick="toggleSidebar()">📜 Referentie</button>
+    </div>
+  </div>
+
+  <div id="voice-panel">
+    <div class="voice-row">
+      <span style="color:#8a6030;font-size:12px">ElevenLabs aan/uit:</span>
+      <button class="hbtn" id="voice-enabled-btn" onclick="toggleVoice()">Uit</button>
+      <span id="voice-error" style="color:#c04040;font-size:12px"></span>
+    </div>
+    <div style="color:#4a3020;font-size:11px">Voice ID en API key worden ingeladen vanuit het opstartscherm. Model: eleven_multilingual_v2 via Pipedream proxy.</div>
+  </div>
+
+  <div id="main">
+    <div id="chat-area">
+      <div id="messages">
+        <div class="thinking" id="thinking">✦ De DM denkt na...</div>
+      </div>
+
+      <div id="quick-actions">
+        <button class="qbtn" onclick="sendMessage('We vallen aan!')">⚔️ Aanvallen</button>
+        <button class="qbtn" onclick="sendMessage('Ik kijk goed om me heen en inspecteer de omgeving.')">🔍 Omgeving</button>
+        <button class="qbtn" onclick="sendMessage('Ik probeer te praten.')">💬 Praten</button>
+        <button class="qbtn" onclick="sendMessage('Ik zoek zorgvuldig naar valstrikken en verborgen deuren.')">🕵️ Traps</button>
+        <button class="qbtn" onclick="sendMessage('We nemen een korte rust om te herstellen.')">🏕️ Rusten</button>
+        <button class="qbtn" onclick="sendMessage('Wat weten we over de locaties in de buurt?')">🗺️ Locaties</button>
+      </div>
+
+      <div id="dice-panel">
+        <div class="dice-row">
+          <button class="dbtn" onclick="rollDie(4)">d4</button>
+          <button class="dbtn" onclick="rollDie(6)">d6</button>
+          <button class="dbtn" onclick="rollDie(8)">d8</button>
+          <button class="dbtn" onclick="rollDie(10)">d10</button>
+          <button class="dbtn" onclick="rollDie(12)">d12</button>
+          <button class="dbtn" onclick="rollDie(20)">d20</button>
+        </div>
+        <div class="tray-row">
+          <span style="color:#8a6030;font-size:11px">MOD</span>
+          <button class="mod-btn" onclick="changeModifier(-1)">−</button>
+          <span id="mod-display">+0</span>
+          <button class="mod-btn" onclick="changeModifier(1)">+</button>
+          <span style="color:#3a2408;font-size:13px;margin:0 4px">|</span>
+          <span id="tray-result">Gooi dobbelstenen...</span>
+          <button class="tray-clear-btn" id="tray-clear" onclick="clearRolls()" style="display:none">✕</button>
+          <button class="tray-send-btn" id="tray-send" onclick="sendRolls()" style="display:none">Stuur ↑</button>
+        </div>
+      </div>
+
+      <div id="input-row">
+        <button id="dice-toggle" onclick="toggleDice()">🎲</button>
+        <input type="text" id="msg-input" placeholder="Wat doe je?..." onkeydown="if(event.key==='Enter')sendMessage()">
+        <button id="send-btn" onclick="sendMessage()">⚔</button>
+      </div>
+    </div>
+
+    <div id="sidebar">
+      <div style="color:#d4af37;font-size:15px;font-weight:700;border-bottom:1px solid #3a2408;padding-bottom:8px">📜 DM Referentie</div>
+      <div class="ref-card">
+        <div class="ref-title">🗡️ Veelgebruikte Saves</div>
+        <div class="ref-line">Goblin Stealth: +6 (vs passieve Perception)</div>
+        <div class="ref-line">Pit/Snare trap: DC 10 Dex save</div>
+        <div class="ref-line">Ghoul Paralyse: DC 10 Con save</div>
+        <div class="ref-line">Glasstaff Sleep: DC 13 Wis save</div>
+        <div class="ref-line">Nothic Rotting Gaze: +4 voor 3d6</div>
+        <div class="ref-line">Venomfang Poison Breath: DC 14 Con, 12d6</div>
+      </div>
+      <div class="ref-card">
+        <div class="ref-title">🏆 XP Mijlpalen</div>
+        <div class="ref-line">Cragmaw Hideout bereikt: 75 XP elk</div>
+        <div class="ref-line">Sildar bevrijden: 75 XP elk</div>
+        <div class="ref-line">Phandalin gered: 250 XP elk</div>
+        <div class="ref-line">Cragmaw Castle: 250 XP elk</div>
+        <div class="ref-line">Nezznar verslagen: 500 XP elk</div>
+      </div>
+      <div class="ref-card">
+        <div class="ref-title">💰 Beloningen</div>
+        <div class="ref-line">Barthen levering: 10gp/persoon</div>
+        <div class="ref-line">Sildar bevrijden: 50gp</div>
+        <div class="ref-line">Lionshield goederen: 50gp</div>
+        <div class="ref-line">Klarg's buidel: 33sp + 3gp + 2x Healing Potion</div>
+        <div class="ref-line">Glasstaff's kamer: 180sp + 130gp + edelstenen</div>
+      </div>
+      <div class="ref-card">
+        <div class="ref-title">🗺️ Locaties</div>
+        <div class="ref-line">Triboar Trail → Goblin Ambush</div>
+        <div class="ref-line">Cragmaw Hideout → 5 mijl NW van ambush</div>
+        <div class="ref-line">Phandalin → Doel van de tocht</div>
+        <div class="ref-line">Tresendar Manor → Redbrand schuilplaats</div>
+        <div class="ref-line">Cragmaw Castle → 20 mijl NO</div>
+        <div class="ref-line">Wave Echo Cave → 15 mijl O van Phandalin</div>
+      </div>
+      <div class="ref-card">
+        <div class="ref-title">🎭 Deel Structuur</div>
+        <div class="ref-line">Deel 1 (lvl 1-2): Goblin Arrows</div>
+        <div class="ref-line">Deel 2 (lvl 2-3): Phandalin + Redbrands</div>
+        <div class="ref-line">Deel 3 (lvl 3-4): Spider's Web</div>
+        <div class="ref-line">Deel 4 (lvl 4-5): Wave Echo Cave</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SYSTEM_PROMPT = `You are the Dungeon Master for "Lost Mine of Phandelver," a D&D 5e adventure. You speak Dutch to the players. Be immersive, dramatic, and fun. Describe scenes vividly, play NPCs in character, handle skill checks by telling players what to roll and interpreting results. Keep sessions flowing — always end your response with a clear prompt for what the players want to do next. Format important game info (DC checks, damage, item names) in bold using markdown **like this**.
+
+== PARTY ==
+The player plays Kira Schaduwhanden — Human Rogue (Thief) level 1, AC 14, HP 9, Init +3. Attacks: Rapier +5/1d8+3, Light Crossbow +5/1d8+3 (80/320ft), Dagger +5/1d4+3. Sneak Attack +1d6. Cunning Action. Stealth +7, Thieves' Tools +7. Neutral. Quiet, observant, raised in Neverwinter alleys.
+
+NPC party members (you play them):
+- Borin Vuurvuist: Dwarf Fighter Champion lvl1, AC 16, HP 13, Lawful Good. Warhammer +5/1d8+3. Second Wind 1d10+1. Old soldier, few words, walks point.
+- Elara Morgendauw: Elf Cleric Life Domain lvl1, AC 14, HP 9, Lawful Good. Cure Wounds 1d8+3, Healing Word 1d4+3, Bless, Sacred Flame. Calm, patient, pragmatic.
+- Zynn Vonkgeest: Gnome Wizard Evocation lvl1, AC 12, HP 7, Chaotic Neutral. Fire Bolt 1d10, Magic Missile 3x1d4+1, Burning Hands 3d6. Hyperactive, loves explosions.
+
+== ADVENTURE OVERVIEW ==
+Players escort supplies to Phandalin for Gundren Rockseeker. Goblins ambushed Gundren — rescue Sildar from Cragmaw Hideout, travel to Phandalin (terrorized by Redbrands/Glasstaff), discover villain Nezznar the Black Spider seeks Wave Echo Cave.
+
+== PART 1: GOBLIN ARROWS ==
+Triboar Trail, supply wagon. Two dead horses with black arrows. Four goblins ambush (Stealth +6). Trail leads 5 miles NW to Cragmaw Hideout.
+
+CRAGMAW HIDEOUT:
+1. Cave Mouth — stream, briar thickets
+2. Goblin Blind — 2 distracted goblins, 3/4 cover
+3. Kennel — 3 chained wolves (DC 15 Animal Handling), 1 sleeping goblin
+4. Steep Passage — 10ft rise, slippery DC 10 Athletics
+5. Overpass — 2 goblins, water dump DC 10 Dex or prone, controls flood trap
+6. Bunkroom — 6 goblins, Sildar Hallwinter prisoner. Yeemik wants to overthrow Klarg.
+7. Twin Pools — flood trap
+8. Klarg's Cave — Bugbear Klarg + wolf Ripper + 2 goblins. Lionshield crate. Pouch: 33sp, 3gp, 2x Potion of Healing.
+
+Goblins know: Klarg answers to King Grol at Cragmaw Castle (~20 miles NE). Black Spider paid to capture Gundren. Gundren+map sent to Grol. Sildar = backup hostage.
+Sildar: Lords' Alliance. Wants to find Iarno Albrek in Phandalin. Offers 50gp if freed.
+
+== PART 2: PHANDALIN ==
+KEY LOCATIONS: Stonehill Inn (Toblen), Barthen's Provisions (10gp delivery reward), Lionshield Coster (Linene, 50gp for stolen goods), Edermath Orchard (Daran, Old Owl Well quest), Shrine of Luck (Sister Garaele, Agatha quest), Miners Exchange (Halia Thornton/Zhentarim, Glasstaff quest), Alderleaf Farm (Carp found tunnel), Townmaster's Hall (Harbin, orc quest), Sleeping Giant (4 Redbrand ruffians), Tresendar Manor (above hideout).
+
+REDBRAND HIDEOUT: 1.Entrance 2.Sepulcher(2 skeletons) 3.Cistern(secret tunnel) 4.Barracks(4 ruffians) 5.Armory(secret door DC15) 6.Secret Passage 7.Glasstaff Workshop(Sending Stone, flees via secret door) 8.Glasstaff Quarters(180sp,130gp,gems,potion) 9.Crevasse(Nothic) 10.Slave Pens(Mirna Dendrar+kids).
+Glasstaff = Iarno Albrek: AC12(15 w/mage armor), HP22, magic missile/sleep/thunderwave/shield. Correspondence reveals Black Spider is drow.
+Nothic: AC15, HP45, reads thoughts, knows Glasstaff identity.
+
+== PART 3: SPIDER'S WEB ==
+Agatha's Lair: Banshee, offer silver comb, one question re Bowgentle's spellbook.
+Old Owl Well: Red Wizard Hamun Kost + 12 zombies.
+Thundertree: Ash zombies, Venomfang (young green dragon AC17 HP136 poison breath DC14/12d6), Reidoth druid knows castle+cave location.
+Wyvern Tor: 6 orcs + Eye of Gruumsh, Brughor Axe-Biter.
+Cragmaw Castle: King Grol has Gundren+map. Doppelganger present.
+
+== PART 4: WAVE ECHO CAVE ==
+15 miles east. Level 4+. Rhythmic booming sounds.
+Key: Forge of Spells (Lightbringer +1 mace, Dragonguard +1 breastplate), Flameskull (AC13 HP40 Fireball), area 20 = NEZZNAR final boss.
+Nezznar: Drow mage AC12(15), HP45, lightning bolt/web/misty step/fly. Spider staff. Surrenders at 10HP. Wants Forge to create monster army.
+Nundro Rockseeker prisoner in area 20.
+
+== MONSTER STATS ==
+Goblin: AC15 HP7 Scimitar+4/1d6+2 Shortbow+4 Nimble Escape
+Bugbear Klarg: AC16 HP27 Morningstar+4/2d8+2 Surprise Attack+2d6
+Hobgoblin: AC18 HP11 Longsword+3 Martial Advantage+2d6
+Wolf: AC13 HP11 Bite+4/2d4+2 prone DC11
+Skeleton: AC13 HP13 immune poison
+Zombie: AC8 HP22 Undead Fortitude
+Ghoul: AC12 HP22 paralyze DC10 Con
+Nothic: AC15 HP45 Rotting Gaze+4/3d6
+Giant Spider: AC14 HP26 Bite+5 poison DC11 Web DC12
+Redbrand Ruffian: AC14 HP16 Shortsword+3/1d6+1
+Glasstaff: AC12(15) HP22
+King Grol: AC15 HP45 Greatclub+5/2d6+3
+Flameskull: AC13 HP40 FireRay+5/3d6x2 Fireball8d6 Regen1hr
+Nezznar: AC12(15) HP45 LightningBolt Web MistyStep
+Venomfang: AC17 HP136 PoisonBreath DC14/12d6
+
+== DM STYLE ==
+Sensory details always. Offer options when stuck. NPCs have distinct voices. Tell player which check+DC, wait for roll, describe result. Dramatic combat narration. Reward creativity. Improvise when needed. Keep responses max ~200 words unless big scene. Always end with clear prompt.`;
+
+let claudeKey = '';
+let elevenKey = '';
+let voiceId = '';
+let voiceEnabled = false;
+let messages = [];
+let modifier = 0;
+let rolls = [];
+let playingAudio = null;
+let playingBtn = null;
+
+const PROXY_URL = 'https://eov6zt7mjg0aqu6.m.pipedream.net';
+
+function startApp() {
+  claudeKey = document.getElementById('setup-claude-key').value.trim();
+  elevenKey = document.getElementById('setup-eleven-key').value.trim();
+  voiceId = document.getElementById('setup-voice-id').value.trim();
+
+  if (!claudeKey) { alert('Vul je Anthropic API key in.'); return; }
+
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  if (elevenKey && voiceId) {
+    document.getElementById('voice-enabled-btn').textContent = 'Inschakelen';
+  }
+
+  initDM();
+}
+
+async function initDM() {
+  showThinking(true);
+  const response = await callClaude([{
+    role: 'user',
+    content: 'Start het avontuur met een dramatische opening op de Triboar Trail. De party rijdt op de wagen richting Phandalin.'
+  }]);
+  showThinking(false);
+  if (response) addMessage('dm', response);
+}
+
+async function sendMessage(text) {
+  const input = document.getElementById('msg-input');
+  const msg = text || input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  addMessage('player', msg);
+  messages.push({ role: 'user', content: msg });
+
+  showThinking(true);
+  document.getElementById('send-btn').disabled = true;
+
+  const response = await callClaude(messages);
+  showThinking(false);
+  document.getElementById('send-btn').disabled = false;
+
+  if (response) {
+    messages.push({ role: 'assistant', content: response });
+    addMessage('dm', response);
+  }
+}
+
+async function callClaude(msgs) {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': claudeKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-client-side-allow-origins': window.location.origin,
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: msgs,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { console.error('Claude error:', data); return 'Fout: ' + (data.error?.message || res.status); }
+    return data.content?.map(b => b.text || '').join('') || '';
+  } catch(e) {
+    console.error('Claude fetch error:', e);
+    return 'Verbindingsfout met Claude: ' + e.message;
+  }
+}
+
+function addMessage(role, text) {
+  const messages_el = document.getElementById('messages');
+  const thinking = document.getElementById('thinking');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap ' + role;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble ' + role;
+
+  const label = document.createElement('div');
+  label.className = 'msg-label ' + role;
+
+  if (role === 'dm') {
+    label.innerHTML = '<span>⚔ Dungeon Master</span>';
+    if (voiceEnabled) {
+      const idx = document.querySelectorAll('.msg-wrap.dm').length;
+      const playBtn = document.createElement('button');
+      playBtn.className = 'play-btn';
+      playBtn.textContent = '▶ Speel';
+      playBtn.onclick = () => speakText(text, playBtn);
+      label.appendChild(playBtn);
+    }
+  } else {
+    label.innerHTML = '<span>🧙 Jij</span>';
+  }
+
+  const textEl = document.createElement('div');
+  textEl.className = 'msg-text';
+  textEl.innerHTML = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+
+  bubble.appendChild(label);
+  bubble.appendChild(textEl);
+  wrap.appendChild(bubble);
+  messages_el.insertBefore(wrap, thinking);
+  messages_el.scrollTop = messages_el.scrollHeight;
+}
+
+async function speakText(text, btn) {
+  if (!elevenKey || !voiceId) {
+    showVoiceError('Geen API key of Voice ID ingesteld.');
+    return;
+  }
+
+  if (playingAudio) {
+    playingAudio.pause();
+    playingAudio = null;
+    if (playingBtn) { playingBtn.textContent = '▶ Speel'; playingBtn.classList.remove('playing'); }
+    if (playingBtn === btn) { playingBtn = null; return; }
+  }
+
+  btn.textContent = '⏳ Laden...';
+  btn.classList.add('playing');
+
+  try {
+    const clean = text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/[#*_]/g, '');
+    const res = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: clean, voice_id: voiceId, api_key: elevenKey }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      showVoiceError('Fout ' + res.status + ': ' + err.slice(0, 60));
+      btn.textContent = '▶ Speel';
+      btn.classList.remove('playing');
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    playingAudio = audio;
+    playingBtn = btn;
+    btn.textContent = '⏸ Speelt...';
+
+    audio.onended = () => {
+      btn.textContent = '▶ Speel';
+      btn.classList.remove('playing');
+      playingAudio = null;
+      playingBtn = null;
+      URL.revokeObjectURL(url);
+    };
+    audio.onerror = (e) => {
+      showVoiceError('Audio fout: ' + e.message);
+      btn.textContent = '▶ Speel';
+      btn.classList.remove('playing');
+      playingAudio = null;
+      playingBtn = null;
+    };
+    audio.play().catch(e => {
+      showVoiceError('Afspelen mislukt: ' + e.message);
+      btn.textContent = '▶ Speel';
+      btn.classList.remove('playing');
+    });
+  } catch(e) {
+    showVoiceError('Verbindingsfout: ' + e.message);
+    btn.textContent = '▶ Speel';
+    btn.classList.remove('playing');
+  }
+}
+
+function showVoiceError(msg) {
+  const el = document.getElementById('voice-error');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+function showThinking(show) {
+  const t = document.getElementById('thinking');
+  const m = document.getElementById('messages');
+  if (show) {
+    t.classList.add('visible');
+    m.appendChild(t);
+    m.scrollTop = m.scrollHeight;
+  } else {
+    t.classList.remove('visible');
+  }
+}
+
+function toggleVoicePanel() {
+  const panel = document.getElementById('voice-panel');
+  const btn = document.getElementById('voice-toggle-btn');
+  panel.classList.toggle('open');
+  btn.classList.toggle('active');
+}
+
+function toggleVoice() {
+  if (!elevenKey || !voiceId) { showVoiceError('Geen API key of Voice ID ingesteld bij opstarten.'); return; }
+  voiceEnabled = !voiceEnabled;
+  const btn = document.getElementById('voice-enabled-btn');
+  btn.textContent = voiceEnabled ? '✓ Aan' : 'Uit';
+  btn.classList.toggle('active', voiceEnabled);
+  document.getElementById('voice-toggle-btn').classList.toggle('active', voiceEnabled);
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-btn').classList.toggle('active');
+}
+
+function toggleDice() {
+  document.getElementById('dice-panel').classList.toggle('open');
+  document.getElementById('dice-toggle').classList.toggle('active');
+}
+
+function rollDie(sides) {
+  const roll = Math.floor(Math.random() * sides) + 1;
+  rolls.push({ sides, roll });
+  updateTray();
+}
+
+function changeModifier(delta) {
+  modifier += delta;
+  document.getElementById('mod-display').textContent = (modifier >= 0 ? '+' : '') + modifier;
+  updateTray();
+}
+
+function updateTray() {
+  const tray = document.getElementById('tray-result');
+  const sendBtn = document.getElementById('tray-send');
+  const clearBtn = document.getElementById('tray-clear');
+
+  if (rolls.length === 0) {
+    tray.textContent = 'Gooi dobbelstenen...';
+    tray.classList.remove('has-rolls');
+    sendBtn.style.display = 'none';
+    clearBtn.style.display = 'none';
+    return;
+  }
+
+  const sum = rolls.reduce((s, r) => s + r.roll, 0) + modifier;
+  const parts = rolls.map(r => `d${r.sides}(${r.roll})`).join(' + ');
+  const modStr = modifier !== 0 ? ` ${modifier >= 0 ? '+' : ''}${modifier}` : '';
+  tray.innerHTML = `${parts}${modStr} = <strong style="color:#f0d060;font-size:15px">${sum}</strong>`;
+  tray.classList.add('has-rolls');
+  sendBtn.style.display = 'inline-block';
+  clearBtn.style.display = 'inline-block';
+}
+
+function clearRolls() {
+  rolls = [];
+  updateTray();
+}
+
+function sendRolls() {
+  if (rolls.length === 0) return;
+  const sum = rolls.reduce((s, r) => s + r.roll, 0) + modifier;
+  const parts = rolls.map(r => `d${r.sides}(${r.roll})`).join(' + ');
+  const modStr = modifier !== 0 ? ` ${modifier >= 0 ? '+' : ''}${modifier}` : '';
+  sendMessage(`🎲 Gooit ${parts}${modStr} = **${sum}**`);
+  clearRolls();
+}
+</script>
+</body>
+</html>
